@@ -24,13 +24,19 @@ typedef struct {
 
 int main(int argc, char *argv[])
 {
+    (void)argc;
+
     int pid;
     const char *search_string, *replacement_string;
 
     char mem_path[20], maps_path[20];
     FILE *mem_fd, *maps_fd;
-
     maps_content_t m = {0};
+
+    char *heap_start, *heap_end;
+    unsigned long start_index;
+    unsigned long end_index;
+    size_t bytes_in_heap;
 
     pid = atoi(argv[1]);
     search_string = strdup(argv[2]);
@@ -74,62 +80,82 @@ int main(int argc, char *argv[])
         }
     }
 
-    char *heap_start, *heap_end;
     heap_start = strtok(m.addr, "-");
-    heap_end_addr = strtok(NULL, "-");
+    heap_end = strtok(NULL, "-");
 
     printf("%s\n", m.map_name);
-    printf("%s     %s\n", heap_start_addr, heap_end_addr);
+    printf("%s     %s\n", heap_start, heap_end);
    
 
-    unsigned long start_index = strtoul(heap_start, NULL, 16);
-    unsigned long end_index = strtoul(heap_end, NULL, 16);
-    size_t bytes_in_heap = end_index - start_index;
+    start_index = strtoul(heap_start, NULL, 16);
+    end_index = strtoul(heap_end, NULL, 16);
+    bytes_in_heap = end_index - start_index;
 
     printf("indeces: %lu    %lu\n", start_index, end_index);
-    printf("bytes in heap: %lu\n", mem_bytes);
+    printf("bytes in heap: %lu\n", bytes_in_heap);
     
     if (fseek(mem_fd, start_index, SEEK_SET) != 0)
     {
         perror("seeking mapped memory");
         exit(1);
-    }
+    }  
 
-    char *buf[bytes_in_heap];
-    size_t b = fread(buf, sizeof (char*), bytes_in_heap, mem_fd);
+    char buf[bytes_in_heap];
+    size_t b = fread(buf, sizeof(char), bytes_in_heap, mem_fd);
     if (b < bytes_in_heap) {
         perror("reading memory into buffer");
         exit(1);
     }
 
-    // printf("buf head: %p", (void*)buf[0]);
+    printf("bytes read from heap: %lu\n", b);
 
-    size_t ss_l = strlen(search_string);
+    // for (size_t i = 0; i < bytes_in_heap; i++) {
+    //     printf("%02x ", (unsigned char)buf[i]);
+    //     if ((i + 1) % 16 == 0) {
+    //         printf("\n");
+    //     }
+    // }
+    // printf("\n");
+
+    char *search_string_addr;
+    size_t search_string_len = strlen(search_string);
+    printf("ss: %s    rp: %s %lu\n", search_string, replacement_string, search_string_len);
     for (size_t i = 0; i < bytes_in_heap; i++)
     {
-        if (memcmp(buf + i, search_string, search_str_len) == 0)
+        // if ((i + search_string_len) >= bytes_in_heap)
+        // {
+        //     break;
+        // }
+
+        if (memcmp(buf+i, search_string, search_string_len) == 0)
         {
-            search_str_heap_addr = (char *)(buf + i);
+            printf("heyyy: %s\n", "ss");
+            search_string_addr = (char *)(start_index + i);
+            printf("search string found at: %p\n", search_string_addr);
+            printf("found string: %s\n", buf+i);
             break;
         }
     }
 
-    if (search_str_heap_addr != NULL)
+    if (search_string_addr != NULL)
     {
-        unsigned long search_str_heap_addr_index =  strtoul(search_str_heap_addr, NULL, 16);
-        if (fseek(mem_fd, start_index + search_str_heap_addr_index, SEEK_SET) != 0)
+        unsigned long ssa = (unsigned long)search_string_addr;
+        if (fseek(mem_fd, ssa, SEEK_SET) != 0)
         {
-            perror("seeking mapped memory for writing");
+            perror("seeking heap memory for writing");
             exit(1);
         }
-        size_t bw = fwrite("World, Hwllo!", 1, search_str_len, mem_fd);
-        if (bw != search_str_len)
+
+        size_t b = fwrite(replacement_string, sizeof(char), search_string_len, mem_fd);
+        if (b != search_string_len)
         {
-            perror("wtf: writing heap");
+            perror("writing to heap memory");
             exit(1);
-        }
-        printf("bytes written: %lu\n", bw);
+        } 
+
+        printf("bytes written to heap: %lu\n", b);
     }
 
     return 0;
+
 }
